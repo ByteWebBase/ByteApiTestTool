@@ -1,10 +1,16 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
+import * as fs from "fs";
+import { AxiosRequestConfig, AxiosResponse } from "axios";
+import { spawn } from "child_process";
+import { url } from "inspector";
 
+let uri: vscode.Uri;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  uri = context.extensionUri;
   // Use the console to output diagnostic information (console.log) and errors (console.error)
   // This line of code will only be executed once when your extension is activated
   console.log(
@@ -30,19 +36,98 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  context.subscriptions.push(disposable, showWindow);
+  let performApiTest = vscode.commands.registerCommand(
+    "byteapitesttool.TestApi",
+    readCode
+  );
+
+  context.subscriptions.push(disposable, showWindow, performApiTest);
+
+  async function readCode() {
+    let editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+
+    let doc = editor.document;
+    let start: vscode.Position = new vscode.Position(0, 0);
+    let end: vscode.Position = new vscode.Position(0, 0);
+
+    for (let i = 0; i < doc.lineCount; i++) {
+      if (
+        doc.lineAt(i).text.includes("//") &&
+        doc.lineAt(i).text.toUpperCase().includes("API START")
+      ) {
+        start = new vscode.Position(i, 0);
+      }
+      if (
+        doc.lineAt(i).text.includes("//") &&
+        doc.lineAt(i).text.toUpperCase().includes("API END")
+      ) {
+        end = new vscode.Position(i, 0);
+      }
+    }
+
+    const range = new vscode.Range(start, end);
+    const code = doc.getText(range);
+
+    const pathTarget = vscode.Uri.joinPath(
+      context.extensionUri,
+      "src",
+      "temp.js"
+    ).path;
+
+    const pathTemplate = vscode.Uri.joinPath(
+      context.extensionUri,
+      "src",
+      "fetcher.js"
+    ).path;
+
+    // first copy fetcher.ts => temp.ts
+    const template = fs.readFileSync(pathTemplate.slice(1), {
+      encoding: "utf-8",
+    });
+    // then append code to temp.ts
+    // fs.writeFileSync(pathTarget.slice(1), code, { mode: "a+" });
+    const path = context.extensionUri.path.slice(1);
+    const pathCode = `const path = \`${path}\`;\n`;
+    fs.writeFileSync(pathTarget.slice(1), pathCode + template + code);
+
+    console.log();
+    await new Promise((resolve) => {
+      spawn("node", ["temp.js"], {
+        cwd: `${context.extensionUri.path.slice(1)}/src`,
+      }).on("close", () => resolve(1));
+    });
+    MainPanel.update();
+    return;
+  }
 }
 
-class MainPanel {
+export class MainPanel {
   public static readonly viewType = "mainPanel";
   public static currentPanel: MainPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
+  public static dataConfig: AxiosRequestConfig | undefined;
+  public static response: AxiosResponse | undefined;
 
   constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this._panel = panel;
     this._extensionUri = extensionUri;
     this._panel.webview.html = this.getHtmlForWebView(this._panel.webview);
+  }
+
+  public static update() {
+    const req = JSON.parse(
+      fs.readFileSync(`${uri.path.slice(1)}/req.txt`).toString()
+    );
+    const res = JSON.parse(
+      fs.readFileSync(`${uri.path.slice(1)}/res.txt`).toString()
+    );
+    if (MainPanel.currentPanel) {
+      MainPanel.currentPanel._panel.webview.postMessage({ req, res });
+    }
   }
 
   public static createOrShow(extensionUri: vscode.Uri) {
@@ -78,9 +163,14 @@ class MainPanel {
         <title>Document</title>
       </head>
       <body>
-        <h1>hello world</h1>
+        <h1>Result</h1>
         <div>
-          <p id="output"></p>
+          <h2>Status</h2>
+          <p id="status"></p>
+          <h2>Data</h2>
+          <p id="data"></p>
+          <h2>Header</h2>
+          <p id="header"></p>
         </div>
       </body>
       <script src="${scriptUri}"></script>
