@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import { AxiosRequestConfig, AxiosResponse } from "axios";
 import { spawn } from "child_process";
-import { url } from "inspector";
 
 let uri: vscode.Uri;
 // this method is called when your extension is activated
@@ -88,7 +87,6 @@ export function activate(context: vscode.ExtensionContext) {
       encoding: "utf-8",
     });
     // then append code to temp.ts
-    // fs.writeFileSync(pathTarget.slice(1), code, { mode: "a+" });
     const path = context.extensionUri.path.slice(1);
     const pathCode = `const path = \`${path}\`;\n`;
     fs.writeFileSync(pathTarget.slice(1), pathCode + template + code);
