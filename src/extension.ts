@@ -5,11 +5,9 @@ import * as fs from "fs";
 import { AxiosRequestConfig, AxiosResponse } from "axios";
 import { spawn } from "child_process";
 
-let uri: vscode.Uri;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  uri = context.extensionUri;
   // Use the console to output diagnostic information (console.log) and errors (console.error)
   // This line of code will only be executed once when your extension is activated
   console.log(
@@ -97,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
         cwd: `${context.extensionUri.path.slice(1)}/src`,
       }).on("close", () => resolve(1));
     });
-    MainPanel.update();
+    MainPanel.update(context.extensionUri);
     return;
   }
 }
@@ -116,7 +114,7 @@ export class MainPanel {
     this._panel.webview.html = this.getHtmlForWebView(this._panel.webview);
   }
 
-  public static update() {
+  public static update(uri: vscode.Uri) {
     const req = JSON.parse(
       fs.readFileSync(`${uri.path.slice(1)}/req.txt`).toString()
     );
